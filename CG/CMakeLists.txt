@@ -75,3 +75,20 @@ add_executable(
 	material.h
 	scene.h
 )
+
+# 図18: 球、マテリアル、カメラ構図を変更したシーン
+add_executable(
+	chapter_advanced_pathtracing_scene
+	chapter_advanced_pathtracing_scene.cpp
+	vec.h
+	ray.h
+	math.h
+	random_pcg.h
+	random.h
+	real.h
+	sphere.h
+	utility.h
+	utility.cpp
+	material.h
+	scene_figure18.h
+)
