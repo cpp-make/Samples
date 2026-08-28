@@ -1,0 +1,62 @@
+name: clang-format
+on:
+  pull_request:
+    # パスフィルタ
+    paths:
+      # 下記にマッチするファイルに変更があった場合のみワークフローを実行する
+      - '**/*.c'
+      - '**/*.cpp'
+      - '**/*.h'
+      - '**/*.hpp'
+env:
+  CLANG_FORMAT_VERSION: 15 # バージョンを変更しやすいように環境変数にする
+
+jobs:
+  # プルリクエストの差分ファイルから clang-format したいパスを取得
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      # step の結果を prepare ジョブの outputs として登録
+      files: ${{ steps.ls-files.outputs.files }}
+      count: ${{ steps.ls-files.outputs.count }}
+    steps:
+      # プルリクエストの差分ファイルのリストを取得するアクション
+      - uses: srz-zumix/gh-pr-ls-files@v1
+        id: ls-files # steps コンテキストで参照するために id をつける
+        with:
+          deleted: false # 削除差分は除外
+          filter: '.*(\.cpp|\.c|\.h|\.hpp)$'
+          exclude: 'doctest/.*' # doctest ディレクトリ以下は除外
+
+  clang-format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    needs: prepare # prepare が成功したら実行する
+    # prepare で取得した差分ファイル数が 0 でなければ実行する
+    if: needs.prepare.outputs.count != '0'
+    env:
+      TARGET_FILES: ${{ needs.prepare.outputs.files }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # 変更をコミットするためプルリクエストをしたブランチを指定
+          ref: "${{ github.head_ref }}"
+      # clang-format をインストール
+      - name: Install clang-format
+        run: |
+          sudo apt-get update && \
+          sudo apt-get install --no-install-recommends -y "clang-format-${CLANG_FORMAT_VERSION}"
+      # clang-format の実行
+      - name: clang-format
+        run: |
+          echo "${TARGET_FILES}" | xargs "clang-format-${CLANG_FORMAT_VERSION}" -i
+      # 指定のファイルをコミットするアクションを使用
+      - name: Commit changes
+        uses: suzuki-shunsuke/commit-action@main
+        with:
+          commit_message: "Apply clang-format-${{ env.CLANG_FORMAT_VERSION }}"
+          files: ${{ env.TARGET_FILES }}

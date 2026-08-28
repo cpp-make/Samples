@@ -1,0 +1,34 @@
+name: Job summary sample
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary sample
+        run: |
+          echo "Hello __world__!" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Summary script sample
+        uses: actions/github-script@v9
+        env:
+          URL: ${{ github.event.pull_request.html_url || github.server_url }}
+        with:
+          # JavaScript で GitHub/GitHub Actions 関連処理が簡単に記述可能
+          script: |
+            // core.summary を使ってサマリーを編集
+            await core.summary
+              .addHeading('Test Results')
+              .addCodeBlock('TEST CASE: lengthSq', "c++")
+              .addTable([
+                [{data: 'Subcase', header: true}, {data: 'Result', header: true}, {data: 'Message', header: true}],
+                ['3-4-5'  , 'Pass ✅', ''],
+                ['5-12-13', 'Fail ❌', 'ERROR: CHECK( p.lengthSq<int>() == 169 ) is NOT correct!<br>values: CHECK( 25 == 169 )'],
+              ])
+              .addLink('Pull Request', process.env.URL)
+              .write()

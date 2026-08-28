@@ -1,0 +1,24 @@
+name: Discord notification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notification:
+    runs-on: ubuntu-latest
+    steps:
+      # curl で Webhook URL にメッセージを送信
+      # Discord に投稿されるメッセージは content に記述する
+      - name: Post to Discord
+        env:
+          CONTENT: |
+            {
+              "content": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} 成功"
+            }
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -f -H "Content-Type: application/json" \
+            -X POST -d "${CONTENT}" "${WEBHOOK_URL}"

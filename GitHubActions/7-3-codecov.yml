@@ -1,0 +1,35 @@
+name: Coverage with Codecov
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      - name: Build
+        run: cmake --build build --target point-test
+      - name: Test
+        run: ctest --verbose
+      - name: lcov
+        run: |
+          sudo apt-get install -y lcov
+          lcov -c -d build/ -o coverage.info --include '*/include/*'
+          lcov -r coverage.info '/usr/include/*' -o coverage.info
+      - name: Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.info     # 集計するファイルのパス
+        if: success() || failure() # テストが成功しても、失敗しても実行する

@@ -1,0 +1,39 @@
+name: Coverage with lcov report
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      - name: Build
+        run: cmake --build build --target point-test
+      - name: Test
+        run: ctest --verbose
+      - name: lcov
+        run: |
+          sudo apt-get install -y lcov # lcov をインストール
+          lcov -c -d build/ -o coverage.info --include '*/include/*'
+          lcov -r coverage.info '/usr/include/*' -o coverage.info
+      - name: Report code coverage
+        uses: zgosalvez/github-actions-report-lcov@v7
+        with:
+          artifact-name: code-coverage-report
+          coverage-files: coverage.info # 集計するファイルのパス
+          update-comment: true # すでにコメント済みであれば、それを更新する形で結果をコメントする（コメントを１つにする）
+          # minimum-coverage: 90
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        if: success() || failure() # テストが成功しても、失敗しても実行する

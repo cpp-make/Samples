@@ -1,0 +1,32 @@
+name: Test with concurrency
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  # PR のときに最新の commit をそれ以外はすべてビルドするように設定します
+  # PR の場合は head_ref があるので head_ref ごとにグループ化
+  # それ以外はロックを取らないのでユニークな run_id に fallback
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  # 同一グループ内ですでにワークフローが実行済みだった場合、キャンセルして新しい event で実行する
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      - name: Build
+        run: cmake --build build --target point-test
+      - name: Test
+        run: ctest --verbose

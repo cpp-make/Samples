@@ -1,0 +1,15 @@
+{
+    "title": "{{ github.workflow }} - {{ github.run_number }}",
+    "description": "{{ job.status | is_success | ternary('成功', '失敗') }}",
+    "url": "{{ github.server_url }}/{{ github.repository }}/actions/runs/{{ github.run_id }}",
+    "color": "{{ job.status | actions_status_color | discord_color }}",
+    "fields": [
+        {% for commit in pull_request.commits -%}
+        {%- if loop.index0 != 0 %},{% endif -%}
+        {
+            "name": "{{ commit.authors[0].login }}",
+            "value": "{{ commit.messageHeadline }}"
+        }
+        {%- endfor %}
+    ]
+}

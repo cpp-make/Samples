@@ -1,0 +1,32 @@
+name: Test with JUnit report
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  checks: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      - name: Build
+        run: cmake --build build --target point-test
+      - name: Test
+        run: ctest --verbose
+      - name: Junit Report
+        uses: mikepenz/action-junit-report@v6
+        if: success() || failure() # テストの成功、失敗に関わらず実行する
+        with:
+          check_name: point-test
+          report_paths: 'build/*-test.xml' # 出力した xml を対象とする
+          detailed_summary: true # 詳細をサマリーに出力

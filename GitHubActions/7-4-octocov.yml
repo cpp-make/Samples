@@ -1,0 +1,32 @@
+name: Coverage with octocov
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      - name: Build
+        run: cmake --build build --target point-test
+      - name: Test
+        run: ctest --verbose
+      - name: lcov
+        run: |
+          sudo apt-get install -y lcov
+          lcov -c -d build/ -o coverage.info --include '*/include/*'
+          lcov -r coverage.info '/usr/include/*' -o coverage.info
+      - uses: k1LoW/octocov-action@v1
+        if: success() || failure() # テストが成功しても、失敗しても実行する

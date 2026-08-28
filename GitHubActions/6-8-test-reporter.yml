@@ -1,0 +1,33 @@
+name: Test with test-reporter
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write # Checks への書き込み権限を付与
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      - name: Build
+        run: cmake --build build --target point-test
+      - name: Test
+        run: ctest --verbose
+      - name: Junit Report
+        uses: dorny/test-reporter@v3
+        if: success() || failure()
+        with:
+          name: point-test
+          path: 'build/*-test.xml' # 出力した xml を対象とする
+          only-summary: true # 詳細なテストスイートやテストケースのリスト出力をスキップ
+          reporter: java-junit

@@ -1,0 +1,33 @@
+name: Discord rich notification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notification:
+    runs-on: ubuntu-latest
+    steps:
+      # curl で Webhook URL にメッセージを送信
+      # embeds にはタイトルやメッセージ、リンクなどのほか、色や追加フィールドを記述できます
+      - name: Post to Discord
+        env:
+          CONTENT: |
+            {
+              "embeds": [{
+                "color": 5763719,
+                "title": "${{ github.workflow }} - ${{ github.run_number }}",
+                "description": "成功",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                "fields": [{
+                  "name": "Attempt",
+                  "value": "${{ github.run_attempt }}"
+                }]
+              }]
+            }
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -f -H "Content-Type: application/json" \
+            -X POST -d "${CONTENT}" "${WEBHOOK_URL}"

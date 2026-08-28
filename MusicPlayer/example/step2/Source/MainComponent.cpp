@@ -1,0 +1,231 @@
+#include "MainComponent.h"
+
+//==============================================================================
+// MainComponent クラスのコンストラクタ定義
+MainComponent::MainComponent()
+{
+    // ※ ここから: オーディオデバイスを初期化する前に実行する必要がある
+
+    // JUCE が提供する基本的なオーディオ形式（WAV、AIFF等）の読み込みサポートを追加する
+    audioFormatManager.registerBasicFormats();
+
+    // 音声ファイルの非同期読み込み用スレッドの作成と開始を行う
+    audioBufferingThread = std::make_unique<juce::TimeSliceThread>("AudioBufferingThread");
+    audioBufferingThread->startThread();
+
+    // オーディオ再生制御機能を有するトランスポートソースを作成する
+    transportSource = std::make_unique<juce::AudioTransportSource>();
+
+    // ※ ここまで: オーディオデバイスを初期化する前に実行する必要がある
+
+    // ウインドウサイズを幅800ピクセル、高さ600ピクセルに設定する
+    setSize(800, 600);
+
+    // オーディオデバイスを指定したチャンネル数で初期化する
+    // 再生機能だけを実装するため
+    // 入力チャンネル数0（入力なし）、出力チャンネル数2（ステレオ出力）に設定
+    setAudioChannels(0, 2);
+}
+
+// MainComponent クラスのデストラクタ定義
+MainComponent::~MainComponent()
+{
+    // オーディオデバイスを停止し、オーディオソースをクリアする
+    shutdownAudio();
+}
+
+//==============================================================================
+// オーディオ処理の準備を行う関数
+// オーディオデバイスとの接続が開く際に必要な初期設定を行う
+// samplesPerBlockExpected: 一度のオーディオコールバックで処理する予定のサンプル数
+// sampleRate: サンプリングレート（1秒あたりのサンプル数）
+void MainComponent::prepareToPlay (int samplesPerBlockExpected, double sampleRate)
+{
+    // トランスポートソースの再生準備を行う
+    transportSource->prepareToPlay(samplesPerBlockExpected, sampleRate);
+}
+
+// オーディオデバイスからのコールバックを受けて
+// 指定されたオーディオバッファに音声データを書き込む関数
+// prepareToPlay() の呼び出し以降、オーディオデバイスが新しい
+// データブロックを必要とするたびにこのコールバックが実行される
+// bufferToFill: 書き込み先バッファへのポインタと、書き込むべき範囲
+//               （開始位置とサンプル数）をまとめた構造体
+//               この範囲に書き込んだデータがオーディオデバイスへ転送される
+void MainComponent::getNextAudioBlock (const juce::AudioSourceChannelInfo& bufferToFill)
+{
+    // アクティブなバッファ領域をクリアする（ノイズ防止）
+    bufferToFill.clearActiveBufferRegion();
+
+    // トランスポートソースに書き込み先のオーディオバッファを渡し
+    // このブロックで再生する音声データを書き込んでもらう
+    transportSource->getNextAudioBlock(bufferToFill);
+}
+
+// オーディオデバイスとの接続が閉じる際に、確保していたリソースを解放する
+void MainComponent::releaseResources()
+{
+    // トランスポートソースのリソースを解放する
+    transportSource->releaseResources();
+}
+
+//==============================================================================
+// コンポーネントの描画を行う関数
+// 背景の塗りつぶしと、その上に重ねる枠やテキストを描画する
+// g: 描画に使用するグラフィックスコンテキスト
+void MainComponent::paint (juce::Graphics& g)
+{
+    // コンポーネントの背景を不透明な色で塗りつぶす
+    // 色は LookAndFeel が持つウインドウ背景色を使う
+    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
+
+    // ユーザーガイダンステキストの枠を描画する
+    // ドラッグ＆ドロップ可能なエリアであることを視覚的に示す
+    g.setColour(juce::Colours::white);
+    g.drawRoundedRectangle(rectTextMessage.reduced(8, 8).toFloat(), 8.0f, 2.0f);
+    
+    // 音声ファイルドラッグ＆ドロップの説明テキストを描画する
+    // 受け付ける形式は実行環境によって変わるため、テキストには含めない
+    const juce::String messageGuide = "Drag and drop an audio file here";
+    g.setColour(juce::Colours::white);
+    g.setFont(14.0f);
+    g.drawFittedText(messageGuide, rectTextMessage, juce::Justification::centred, 2);
+
+    // 現在再生中の音声ファイル名を表示する
+    // ファイルが読み込まれている場合、ファイル名を追加で表示する
+    if (currentPlayingAudioFile.getFullPathName().isNotEmpty())
+    {
+        const juce::String messageFile = "Playing: " + currentPlayingAudioFile.getFileName();
+        g.setColour(juce::Colours::white);
+        g.setFont(14.0f);
+        g.drawFittedText(messageFile, rectTextMessage.withY(rectTextMessage.getY() + 28.0f),
+            juce::Justification::centred, 2);
+    }
+}
+
+// コンポーネントのサイズが変更されたときに呼ばれる関数
+// ウインドウのリサイズに応じて、コンポーネントのレイアウトを調整する
+void MainComponent::resized()
+{
+    // テキストメッセージ表示領域を現在のコンポーネントサイズに合わせて設定する
+    // ウインドウのサイズ変更時に、メッセージ表示エリアを適切に調整する
+    rectTextMessage = getLocalBounds();
+
+    // GUI の再描画を要求する
+    repaint();
+}
+
+//==============================================================================
+// 音声ファイルを読み込む関数
+// fileToLoad: 読み込む音声ファイル
+void MainComponent::loadAudioFile(const juce::File& fileToLoad)
+{
+    // 新しいファイルを読み込む前に、トランスポートソースの再生を停止する
+    transportSource->stop();
+
+    // トランスポートソースが保持している以前のオーディオソースを解除する
+    transportSource->setSource(nullptr);
+
+    // 既存の音声ファイルソースをリセットする
+    audioFormatSource.reset();
+
+    // 新しいファイルを読み込む
+    if (auto* reader = audioFormatManager.createReaderFor(fileToLoad))
+    {
+        // 音声ファイルリーダーを使用して新しいオーディオソースを作成する
+        audioFormatSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
+        
+        // プリフェッチ用のバッファサイズを設定する定数
+        // スムーズな再生のために、先読みするオーディオデータのサイズを定義する
+        const int readerAheadSize = 32768;
+
+        // トランスポートソースに音声サンプル読み込み対象のオーディオソースをセットする
+        // 第四引数には音声ファイルの実際のサンプリングレートを渡す
+        // 異なる値を渡すと再生速度やピッチが変化する原因になるので注意する
+        transportSource->setSource(
+            audioFormatSource.get(),     // 音声サンプル読み込み対象のオーディオソース
+            readerAheadSize,             // プリフェッチ用のバッファサイズ
+            audioBufferingThread.get(),  // バッファリングスレッド
+            reader->sampleRate           // 読み込み対象のサンプリングレート
+        );
+
+        // ファイル読み込み後にトランスポートソースの再生を開始する
+        transportSource->start();
+
+        // 現在再生しているファイル名を表示するためのファイルオブジェクトを更新する
+        // GUI に表示する現在のファイル情報を設定する
+        currentPlayingAudioFile = fileToLoad;
+    }
+    else
+    {
+        // ファイルの読み込みに失敗した場合、再生ファイル情報をクリアする
+        currentPlayingAudioFile = "";
+    }
+
+    // 新しいファイル情報や状態を反映するため、GUI の再描画を要求する
+    repaint();
+}
+
+// オーディオデバイス設定ダイアログを表示する関数
+// ユーザーにオーディオデバイスの詳細な設定を許可する
+void MainComponent::showAudioDeviceSettingsDialog()
+{
+    // オーディオデバイス選択コンポーネントを動的に作成する
+    // デバイスの入出力チャンネル数や詳細設定を構成するためのダイアログを準備する
+    juce::AudioDeviceSelectorComponent* selector =
+        new juce::AudioDeviceSelectorComponent(deviceManager,
+                                                0, 256,  // 最小および最大入力チャンネル数
+                                                0, 256,  // 最小および最大出力チャンネル数
+                                                true, true,  // ステレオ/モノラルの選択を許可
+                                                true, false  // MIDIデバイス設定の表示
+                                            );
+    selector->setSize(400, 600);
+
+    // ダイアログウインドウの設定
+    juce::DialogWindow::LaunchOptions dialog;
+    dialog.content.setOwned(selector);
+    dialog.dialogTitle = "Audio/MIDI Device Settings";
+    dialog.componentToCentreAround = this;
+    dialog.dialogBackgroundColour =
+        getLookAndFeel().findColour(juce::ResizableWindow::backgroundColourId);
+    dialog.escapeKeyTriggersCloseButton = true;
+    dialog.useNativeTitleBar = false;
+    dialog.resizable = false;
+    dialog.useBottomRightCornerResizer = false;
+
+    // 非同期でダイアログを表示する
+    dialog.launchAsync();
+}
+
+//==============================================================================
+// ドラッグされたファイルを受け入れるかどうかを判定する関数
+// files: ドラッグされたファイルの配列
+// 戻り値: 受け入れる場合は true、そうでない場合は false
+bool MainComponent::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    // オーディオフォーマットマネージャが認識できるファイル形式のフィルタを作成する
+    const juce::WildcardFileFilter filter(
+        audioFormatManager.getWildcardForAllFormats(), {}, "Known Audio Formats");
+
+    // ファイルが1つだけで、そのファイルがフィルタに適合する場合に true を返す
+    return files.size() == 1 && filter.isFileSuitable(files[0]);
+}
+
+// ファイルがドロップされたときに呼ばれる関数
+// files: ドロップされたファイルの配列
+// x, y: ドロップされた位置の座標
+void MainComponent::filesDropped(const juce::StringArray& files, int x, int y)
+{
+    // ファイルが1つ以上ドロップされたことを判定する
+    if (files.size() > 0)
+    {
+        // 最初のファイルのパスを取得する
+        const juce::String filePath = files.getReference(0);
+
+        // ファイルパスから juce::File オブジェクトを作成する
+        const juce::File fileToLoad = juce::File(filePath);
+
+        // 音声ファイルを読み込んで再生を開始する
+        loadAudioFile(fileToLoad);
+    }
+}

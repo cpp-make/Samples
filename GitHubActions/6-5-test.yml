@@ -1,0 +1,27 @@
+name: Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # CMakeでプロジェクトを作成
+      - name: CMake
+        run: |
+          mkdir build && cd build
+          cmake -Dbuild_tests=ON -Dbuild_app=OFF ..
+      # CMake でビルド
+      - name: Build
+        run: cmake --build build --target point-test
+      # CTest でテストを実行
+      - name: Test
+        run: ctest --verbose # 詳細ログを出力

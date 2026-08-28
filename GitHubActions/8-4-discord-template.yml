@@ -1,0 +1,39 @@
+name: Discord template notification
+
+on:
+  pull_request:
+
+jobs:
+  notification-template:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+      # プルリクエストの情報を json で取得
+      - name: Create pr view json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr view --repo ${{ github.repository }} ${{ github.event.number }} \
+            --json comments,commits --jq '{ pull_request: . }' > pr.json
+      - name: Create embeds
+        id: embeds
+        uses: srz-zumix/kamidana-action@v3
+        with:
+          # テンプレートファイルから embeds の内容を生成する
+          template: .github/template/embeds.json.j2
+          # 追加情報としてプルリクエスト情報の json を渡す
+          data_files: pr.json
+      # テンプレートエンジンで生成した結果を送信
+      - name: Post to Discord
+        env:
+          CONTENT: |
+            {
+              "embeds": [ ${{ steps.embeds.outputs.text }} ]
+            }
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -f -H "Content-Type: application/json" \
+            -X POST -d "${CONTENT}" "${WEBHOOK_URL}"

@@ -1,0 +1,47 @@
+name: Xcode build on macOS
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # macOS ランナーを選択
+    runs-on: macos-latest
+    env:
+      # Xcode の選択
+      # DEVELOPER_DIR環境変数にXcodeのパスを設定することで使用するXcodeを指定できます
+      # https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md#xcode
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app
+    steps:
+      # チェックアウト
+      - uses: actions/checkout@v6
+
+      # CMakeでプロジェクトを作成
+      - name: CMake
+        # -GオプションでXcodeのプロジェクトを作成するように指示
+        run: mkdir build && cd build && cmake -G Xcode ..
+      # ビルドの実行
+      - name: Build
+        working-directory: build # buildディレクトリに移動して下記コマンドを実行
+        run: |
+          xcodebuild -project PointExample.xcodeproj build -target ALL_BUILD \
+            -parallelizeTargets -configuration Debug -hideShellScriptEnvironment
+
+      # 成果物をアップロード
+      - name: Archive app
+        env:
+          ARCHIVE_PATH: build/bin
+        shell: pwsh
+        # powershellで成果物ディレクトリを圧縮
+        run: Compress-Archive -Path $Env:ARCHIVE_PATH -Destination point.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: point-macos
+          path: point.zip

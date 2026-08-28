@@ -1,0 +1,43 @@
+name: Visual Studio build on Windows
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Windows ランナーを選択
+    runs-on: windows-latest
+    steps:
+      # セットアップ
+      - uses: actions/checkout@v6
+      - uses: microsoft/setup-msbuild@v3
+
+      # CMakeでプロジェクトを作成
+      - name: CMake
+        # -GオプションでVisual Studioのプロジェクトを作成するように指示
+        run: |
+          mkdir build && cd build && cmake -G "Visual Studio 17 2022" ..
+      # ビルドの実行
+      - name: Build
+        working-directory: build # buildディレクトリに移動して下記コマンドを実行
+        run: |
+          msbuild PointExample.sln -t:rebuild -verbosity:diag -property:Configuration=Release
+
+      # 成果物をアップロード
+      - name: Archive app
+        env:
+          ARCHIVE_PATH: build/bin
+        shell: pwsh
+        # powershellで成果物ディレクトリを圧縮
+        run: Compress-Archive -Path $Env:ARCHIVE_PATH -Destination point.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: point-Windows
+          path: point.zip

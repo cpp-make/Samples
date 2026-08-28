@@ -1,0 +1,26 @@
+name: cpp-linter
+on:
+  pull_request:
+
+jobs:
+  cpp-linter:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      # プルリクエストにレビューするためのトークンを環境変数で教える
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cpp-linter/cpp-linter-action@v2
+        with:
+          version: 18 # clang のバージョン
+          tidy-review: true
+          format-review: true
+          # 指定パスの指摘を無視する
+          ignore: |
+            .github
+            doctest
+          # clang-tidy にわたす追加のオプション
+          extra-args: -std=c++23 -Iinclude -Idoctest

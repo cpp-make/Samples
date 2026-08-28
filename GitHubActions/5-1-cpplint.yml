@@ -1,0 +1,27 @@
+name: cpplint
+on:
+  pull_request: # プルリクエストに対して実行する
+
+jobs:
+  cpplint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read       # リポジトリの内容を読み取る権限
+      pull-requests: write # プルリクエストにコメントするためにwrite権限を付与
+    steps:
+      - uses: actions/checkout@v6
+      - uses: reviewdog/action-cpplint@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # プルリクエストレビュー方式で指摘してもらう（図6）
+          reporter: github-pr-review
+          # cpplint への追加のオプション
+          flags: --extensions=h,hpp,c,cpp,cc,cu,ipp --linelength=150
+          # cpplint でデフォルトで指摘する項目から一部を除外
+          # 先頭に - をつけると除外できる
+          filter: "-build/header_guard\
+            ,-build/include\
+            ,-build/include_what_you_use\
+            ,-readability/braces\
+            ,-readability/todo\
+            "

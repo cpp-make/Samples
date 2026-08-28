@@ -1,0 +1,38 @@
+name: CMake build on Linux
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Linux ランナーを選択
+    runs-on: ubuntu-latest
+    steps:
+      # チェックアウト
+      - uses: actions/checkout@v6
+
+      # CMakeでプロジェクトを作成
+      - name: CMake
+        run: mkdir build && cd build && cmake ..
+      # ビルドの実行
+      - name: Build
+        run: cmake --build build
+
+      # 成果物をアップロード
+      - name: Archive app
+        env:
+          ARCHIVE_PATH: build/bin
+        shell: pwsh
+        # powershellで成果物ディレクトリを圧縮
+        run: Compress-Archive -Path $Env:ARCHIVE_PATH -Destination point.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: point-linux
+          path: point.zip
